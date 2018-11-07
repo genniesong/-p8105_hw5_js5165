@@ -13,7 +13,27 @@ knitr::opts_chunk$set(
   out.width = "90%"
 )
 library(tidyverse)
-theme_set(theme_bw() + theme(legend.position = "bottom"))
+
 ```
 
 ## Problem 1
+```{r P1}
+import_file = function(x){read_csv(paste0('./data/', x))}
+observ = list.files('./data/', pattern = '*.csv') %>% 
+  map(import_file) %>% 
+  reduce(rbind) %>% 
+  janitor::clean_names() %>% 
+  mutate(seq = seq(from=1, to=20, by=1),
+         group = ifelse(seq < 11, c('control'), c('exp')),
+         sub = rep(1:10, 2),
+         id = paste(group, sub, sep = '_')) %>% 
+  gather(key = "week", value = "observation", week_1:week_8) %>%
+  select(id, week, observation)
+
+  
+
+
+```
+
+
+
