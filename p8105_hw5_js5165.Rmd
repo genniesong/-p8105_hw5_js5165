@@ -17,9 +17,11 @@ library(tidyverse)
 ```
 
 ## Problem 1
+### P1 TIDINESS
+
 ```{r P1}
-import_file = function(x){read_csv(paste0('./data/', x))}
-observ = list.files('./data/', pattern = '*.csv') %>% 
+import_file = function(x){read_csv(paste0('./data/p1/', x))}
+observ = list.files('./data/p1/', pattern = '*.csv') %>% 
   map(import_file) %>% 
   reduce(rbind) %>% 
   janitor::clean_names() %>% 
@@ -28,9 +30,12 @@ observ = list.files('./data/', pattern = '*.csv') %>%
          sub = rep(1:10, 2),
          id = paste(group, sub, sep = '_')) %>% 
   gather(key = "week", value = "observation", week_1:week_8) %>%
+  mutate(week = str_replace(week, "week_", "")) %>% 
   select(id, group, week, observation)
   
 ```
+
+### P1 PLOT
 
 ```{r P1 plot}
 p1_plot = observ %>% 
@@ -43,5 +48,58 @@ p1_plot = observ %>%
     ) +
   theme(legend.position = "right")
 p1_plot
+```
+
+From the plot we can see the fluctuation of each subjects. But in general values of subjects in experimental group are higher than values observed in control group.
+
+## Problem 2
+
+```{r P2}
+homicide = read_csv("./data/homicide-data.csv")%>%
+  janitor::clean_names()
+```
+
+It is a 52179*12 dataset of murders over the past decade in 50 of the largest American cities. The dataset includes the information of each incident (id, date, state, city, longitude and latitude of where it took place, and deposition), and information of the victim of each incident (name, race, age and gender).
+
+### total number of homicides and the number of unsolved homicides within each city
+
+```{r P2.1}
+homicide = homicide  %>% 
+  mutate(city_state = paste(city, state, sep = ', ')) 
+homicide_count = homicide %>% 
+  group_by(city_state) %>% 
+  mutate(total_homicide = n()) %>% 
+  filter(disposition == 'Closed without arrest' | disposition == 'Open/No arrest') %>% 
+  mutate(unsolved_homicide = n()) %>% 
+  distinct(city_state, total_homicide, unsolved_homicide)
+  
+```
+
+
+```{r P2.2}
+homicide_baltimore = homicide_count %>% 
+  filter(city_state == 'Baltimore, MD')
+  
+prop_test = prop.test(homicide_baltimore$unsolved_homicide, homicide_baltimore$total_homicide) %>% 
+  broom::tidy() %>% 
+  select(estimate, conf.low, conf.high)
+  
+```
+
+
+```{r P2.3}
+homicide_all = homicide %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(total = map(.x = data, ~count(.x)),
+         unsolved = map(.x = data, ~count(.x %>% 
+                       filter(disposition == 'Closed without arrest' | disposition == 'Open/No arrest')))) %>%
+  select(city_state, total, unsolved) %>% 
+  unnest() %>% 
+  rename(total = n, unsolved = n1) 
+
+prop_all = map2(.x = homicide_all$unsolved, .y = homicide_all$total, ~prop.test(.x, .y)) %>% 
+  broom::tidy() 
+  
 ```
 
