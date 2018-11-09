@@ -13,13 +13,13 @@ knitr::opts_chunk$set(
   out.width = "90%"
 )
 library(tidyverse)
-
+theme_set(theme_bw() + theme(legend.position = "right"))
 ```
 
 ## Problem 1
-### P1 TIDINESS
+### Dataset Tidiness
 
-```{r P1}
+```{r P1 tidiness}
 import_file = function(x){read_csv(paste0('./data/p1/', x))}
 observ = list.files('./data/p1/', pattern = '*.csv') %>% 
   map(import_file) %>% 
@@ -36,6 +36,8 @@ observ = list.files('./data/p1/', pattern = '*.csv') %>%
 ```
 
 ### P1 PLOT
+
+Now we are making a plot to show observations on each subject over time
 
 ```{r P1 plot}
 p1_plot = observ %>% 
@@ -63,7 +65,9 @@ It is a 52179*12 dataset of murders over the past decade in 50 of the largest Am
 
 ### total number of homicides and the number of unsolved homicides within each city
 
-```{r P2.1}
+First, we are going to summarize within cities to obtain the total number of homicides and the number of unsolved homicides.
+
+```{r P2.1 summary}
 homicide = homicide  %>% 
   mutate(city_state = paste(city, state, sep = ', ')) 
 homicide_count = homicide %>% 
@@ -75,19 +79,24 @@ homicide_count = homicide %>%
   
 ```
 
+Now we are going to estimate the proportion of homicides and get confidence interval for unsolved homicides in Baltimore, MD.
+The estimated proportion is 0.6456 with 95% CI(0.6276,0.6632).
 
-```{r P2.2}
+```{r P2.2 Baltimore}
 homicide_baltimore = homicide_count %>% 
   filter(city_state == 'Baltimore, MD')
   
-prop_test = prop.test(homicide_baltimore$unsolved_homicide, homicide_baltimore$total_homicide) %>% 
+prop_baltimore = prop.test(homicide_baltimore$unsolved_homicide, homicide_baltimore$total_homicide) %>% 
   broom::tidy() %>% 
   select(estimate, conf.low, conf.high)
-  
+
+save(prop_baltimore, file = "Baltimore.RData")
 ```
 
+Now let's estimate the proportion of homicides and get confidence interval for each of the cities.
+Reorganize from the raw data using map, map2, nest and unnest.
 
-```{r P2.3}
+```{r P2.3 All cities}
 homicide_all = homicide %>% 
   group_by(city_state) %>% 
   nest() %>% 
@@ -98,8 +107,29 @@ homicide_all = homicide %>%
   unnest() %>% 
   rename(total = n, unsolved = n1) 
 
-prop_all = map2(.x = homicide_all$unsolved, .y = homicide_all$total, ~prop.test(.x, .y)) %>% 
-  broom::tidy() 
-  
+prop_func = function(x) {
+  broom::tidy(x) %>% 
+  select(estimate, conf.low, conf.high)
+}
+
+prop_all = map2(.x = homicide_all$unsolved, .y = homicide_all$total, ~prop.test(.x, .y))
+prop_cities = map_df(.x = prop_all, ~prop_func(.x)) %>% 
+  mutate(city_state = homicide_all$city_state) %>% 
+  select(city_state, estimate, conf.low, conf.high)
 ```
 
+We are going to create a plot that shows the estimates and CIs for each city.
+We can conclude from the plot that the estimated proportion of Chicago is far higher than the rest of the cities; and Richmond has the lowest estimated proportion.
+
+```{r P2.4 plot}
+prop_cities %>% 
+  ggplot(aes(x = forcats::fct_reorder(city_state,estimate), y = estimate, color = city_state)) +
+  geom_point() +
+  geom_errorbar(mapping = aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 75, size = 7)) +
+  labs(
+      title = "Estimate and CI of Unsolved Homicides for Each City",
+      x = "City",
+      y = "Estimated Proportion"
+    )
+```
